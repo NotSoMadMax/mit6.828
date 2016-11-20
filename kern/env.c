@@ -118,6 +118,7 @@ env_init(void)
 	// LAB 3: Your code here.
 	for (int i = NENV - 1; i >= 0; i--) {
 		envs[i].env_id = 0;
+		envs[i].env_status = ENV_FREE;
 		envs[i].env_link = env_free_list;
 		env_free_list = &envs[i];
 	}
@@ -275,14 +276,15 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
-	va = ROUNDDOWN(va, PGSIZE);
+	void *va_t = ROUNDDOWN(va, PGSIZE);
+
 	void *end = ROUNDUP(va + len, PGSIZE);
-	for(; va < end;va+=PGSIZE){
+	for(; va_t < end;va_t += PGSIZE){
 		struct PageInfo *pp = page_alloc(1);	
 		if(pp == NULL){
 			panic("page alloc failed!\n");	
 		}
-		page_insert(e->env_pgdir, pp, va, PTE_U | PTE_W);	
+		page_insert(e->env_pgdir, pp, va_t, PTE_U | PTE_W);	
 	}
 }
 
@@ -364,6 +366,7 @@ load_icode(struct Env *e, uint8_t *binary)
 
 	// LAB 3: Your code here.
 	region_alloc(e, (void *) (USTACKTOP - PGSIZE), PGSIZE);
+
 }
 
 //
@@ -504,7 +507,6 @@ env_run(struct Env *e)
 	curenv = e;
 	curenv->env_status = ENV_RUNNING;
 	curenv->env_runs ++;
-	cprintf("hello\n");
 	lcr3(PADDR(e->env_pgdir));
 	env_pop_tf(&e->env_tf);
 	

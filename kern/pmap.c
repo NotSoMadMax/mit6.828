@@ -161,7 +161,6 @@ mem_init(void)
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
 	envs = (struct Env *) boot_alloc(NENV * sizeof(struct Env));
-	memset(envs, 0, NENV * sizeof(struct Env));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -555,6 +554,21 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	void *vat =(void *) va;
+	void *end =(void *)va + len;
+	int p = perm | PTE_P;
+	pte_t *pte;
+	for (; vat < end; vat = ROUNDDOWN(vat+PGSIZE, PGSIZE)) {
+		if ((uint32_t)vat > ULIM) {
+			user_mem_check_addr =(uintptr_t) vat;
+			return -E_FAULT;
+		}
+		page_lookup(env->env_pgdir, vat, &pte);
+		if (!(pte && ((*pte & p) == p))) {
+			user_mem_check_addr = (uintptr_t) vat;
+			return -E_FAULT;
+		}
+	}
 
 	return 0;
 }
