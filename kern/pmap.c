@@ -272,6 +272,12 @@ mem_init_mp(void)
 	//
 	// LAB 4: Your code here:
 
+    uintptr_t kstacktop_i;
+    for(int i = 0; i < NCPU; i++){
+        kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP);
+        boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, KSTKSIZE, PADDR(percpu_kstacks[i]), PTE_W);
+    }
+
 }
 
 // --------------------------------------------------------------
@@ -311,7 +317,7 @@ page_init(void)
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
 	
-	size_t i, io_page_i, ext_page_i, free_top;
+	size_t i, io_page_i, ext_page_i, free_top, mpentry_i;
 	for (i = 0; i < npages; i++) {
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
@@ -332,7 +338,10 @@ page_init(void)
 	pages[free_top].pp_link = pages[ext_page_i].pp_link;
 	for (i = ext_page_i; i < free_top; i++)
 		pages[i].pp_link = NULL;
-
+        
+    mpentry_i = PGNUM(MPENTRY_PADDR);
+    pages[mpentry_i + 1].pp_link = pages[mpentry_i].pp_link;
+    pages[mpentry_i].pp_link = NULL;
 }
 
 //
@@ -596,7 +605,15 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+    size = ROUNDUP(size, PGSIZE);
+    if(base + size > MMIOLIM){
+        panic("mmio_map_region: reservation mem overflow");
+    }
+    boot_map_region(kern_pgdir, base, size, pa, PTE_W | PTE_PCD | PTE_P);
+    uintptr_t b = base;
+    base += size;
+    return (void *) b;
+    //panic("mmio_map_region not implemented");
 }
 
 static uintptr_t user_mem_check_addr;
