@@ -25,6 +25,11 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	// LAB 4: Your code here.
+    pte_t pte = ((pte_t *) uvpt)[PGNUM(addr)];
+    if(!( (err & FEC_WR) != 0 && (pte & PTE_COW)!=0 )){
+        panic("pgfault: not write and not a COW page");
+        return;
+    }
 
 	// Allocate a new page, map it at a temporary location (PFTEMP),
 	// copy the data from the old page to the new page, then move the new
@@ -33,8 +38,17 @@ pgfault(struct UTrapframe *utf)
 	//   You should make three system calls.
 
 	// LAB 4: Your code here.
+    addr = ROUNDDOWN(addr, PGSIZE);
+    envid_t envid = sys_getenvid();
+    if ((r = sys_page_alloc(envid, PFTEMP, PTE_P | PTE_U | PTE_W)) < 0)
+        panic("pgfault: %e", r);
+    memcpy(PFTEMP, addr, PGSIZE);
+    if ((r = sys_page_map(envid, PFTEMP, envid, addr, PTE_P | PTE_U | PTE_W)) < 0)
+        panic("pgfault: %e", r);
+    if ((r = sys_page_unmap(envid, PFTEMP)) < 0)
+        panic("pgfault: %e", r);
 
-	panic("pgfault not implemented");
+    return;
 }
 
 //
@@ -52,9 +66,18 @@ static int
 duppage(envid_t envid, unsigned pn)
 {
 	int r;
-
+    
 	// LAB 4: Your code here.
-	panic("duppage not implemented");
+    void *addr = (void *)(pn * PGSIZE);
+    if ((uvpt[pn] & PTE_W) || (uvpt[pn] & PTE_COW)) {
+        if ((r = sys_page_map(0, addr, envid, addr, PTE_P | PTE_U | PTE_COW)) < 0)
+            panic("duppage: %e", r);
+        if ((r = sys_page_map(0, addr, 0, addr, PTE_P | PTE_U | PTE_COW)) < 0)
+            panic("duppage: %e", r);
+    } else if ((r = sys_page_map(0, addr, envid, addr, PTE_P | PTE_U)) < 0)
+        panic("duppage: %e", r);
+
+	//panic("duppage not implemented");
 	return 0;
 }
 
@@ -77,9 +100,37 @@ duppage(envid_t envid, unsigned pn)
 envid_t
 fork(void)
 {
+    envid_t envid;
 	// LAB 4: Your code here.
-	panic("fork not implemented");
+    uintptr_t addr;
+
+    set_pgfault_handler(&pgfault); 
+    envid = sys_exofork();
+    if(envid < 0)
+        panic("fork: sys_exofork failed");
+    if(envid == 0){
+        thisenv = &envs[ENVX(sys_getenvid())]; 
+        return 0; 
+    }
+
+    for (addr = 0; addr < USTACKTOP; addr += PGSIZE) {
+        if ((uvpd[PDX(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_P))
+            duppage(envid, PGNUM(addr));
+    }
+
+    if (sys_page_alloc(envid, (void *) (UXSTACKTOP - PGSIZE), 
+                    PTE_P | PTE_U | PTE_W) < 0)
+        panic("fork: sys_page_alloc failed");
+
+    extern void _pgfault_upcall();
+    sys_env_set_pgfault_upcall(envid, _pgfault_upcall);
+
+    if (sys_env_set_status(envid, ENV_RUNNABLE) != 0)
+        panic("fork: sys_env_set_status");
+
+    return envid; 
 }
+
 
 // Challenge!
 int

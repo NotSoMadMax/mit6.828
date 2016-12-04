@@ -118,6 +118,7 @@ sys_env_set_status(envid_t envid, int status)
         return 0;
     }
     return -E_INVAL; 
+
 }
 
 // Set the page fault upcall for 'envid' by modifying the corresponding struct
@@ -132,7 +133,13 @@ static int
 sys_env_set_pgfault_upcall(envid_t envid, void *func)
 {
 	// LAB 4: Your code here.
-	panic("sys_env_set_pgfault_upcall not implemented");
+    struct Env *env;
+    int r = envid2env(envid, &env, 1);
+    if(r!=0)
+        return r;
+    env->env_pgfault_upcall = func;
+    return 0;
+
 }
 
 // Allocate a page of memory and map it at 'va' with permission
@@ -305,8 +312,38 @@ sys_page_unmap(envid_t envid, void *va)
 static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
-	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+    struct Env *env;
+    int r = envid2env(envid, &env, 0);
+    int flag = PTE_U | PTE_P;
+    if(r!=0)
+        return r;
+    if(!env->env_ipc_recving)
+        return -E_IPC_NOT_RECV;
+    if(srcva < (void *) UTOP){
+        if(srcva != ROUNDUP(srcva, PGSIZE)) 
+            return -E_INVAL;
+
+        pte_t *pte;
+        struct PageInfo *pp = page_lookup(curenv->env_pgdir, srcva, &pte);
+        if(pp == NULL)
+            return -E_INVAL;
+
+        if ((!(perm & (PTE_U | PTE_P))) || (perm & (~(PTE_U | PTE_P | PTE_AVAIL | PTE_W))))
+            return -E_INVAL;
+
+        if ((perm & PTE_W) && !(*pte & PTE_W))
+            return -E_INVAL;
+
+        r = page_insert(env->env_pgdir, pp, env->env_ipc_dstva, perm);
+        if(r!=0)
+            return r;
+    }
+    env->env_ipc_value = value;
+    env->env_ipc_recving = false;
+    env->env_ipc_from = curenv->env_id;
+    env->env_status = ENV_RUNNABLE;
+    env->env_tf.tf_regs.reg_eax = 0;
+    return 0;
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -324,8 +361,16 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
-	return 0;
+    if(dstva < (void *)UTOP && dstva != ROUNDDOWN(dstva, PGSIZE)){
+        return -E_INVAL; 
+    }
+    curenv->env_ipc_recving =true;
+    curenv->env_ipc_dstva = dstva;
+    curenv->env_status = ENV_NOT_RUNNABLE;
+    sys_yield();
+
+    return 0;
+
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
@@ -335,8 +380,6 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	// Call the function corresponding to the 'syscallno' parameter.
 	// Return any appropriate return value.
 	// LAB 3: Your code here.
-
-	//panic("syscall not implemented");
 
 	switch (syscallno) {
 		case SYS_cputs:
@@ -361,6 +404,12 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_page_unmap(a1, (void *) a2);
         case SYS_env_set_status:
             return sys_env_set_status(a1, a2);
+        case SYS_env_set_pgfault_upcall:
+            return sys_env_set_pgfault_upcall(a1,(void *) a2);
+        case SYS_ipc_try_send:
+            return sys_ipc_try_send(a1, a2, (void *)a3, a4);
+        case SYS_ipc_recv:
+            return sys_ipc_recv((void *)a1);
 		default:
 			return -E_INVAL;
 	}
