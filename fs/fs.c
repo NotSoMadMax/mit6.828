@@ -61,14 +61,12 @@ alloc_block(void)
 	// contains the in-use bits for BLKBITSIZE blocks.  There are
 	// super->s_nblocks blocks in the disk altogether.
     int i = 0;
-    int blockno = 0;
-    for (i = 0; i < super->s_nblocks; i++){
-         blockno = i + 2; 
-         if(block_is_free(blockno)){
-            bitmap[blockno/32] &= ~(1<<(blockno%32)); 
-            flush_block(diskaddr(blockno));
-            return blockno;
-         }
+    for (i = 0; i < super->s_nblocks; i++) {
+        if (block_is_free(i)) {
+            bitmap[i / 32] &= ~(1 << ( i %32));
+            flush_block(diskaddr(i));
+            return i;
+        }
     }
 
 	//panic("alloc_block not implemented");
