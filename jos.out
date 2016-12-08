@@ -21,8 +21,8 @@ file_open is good
 file_get_block is good
 file_flush is good
 file_truncate is good
-2
 file rewrite is good
+2
 3
 5
 7
@@ -191,4 +191,4 @@ file rewrite is good
 991
 997
 1009
-qemu: terminating on signal 15 from pid 25847
+qemu: terminating on signal 15 from pid 8233

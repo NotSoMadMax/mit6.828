@@ -306,7 +306,6 @@ copy_shared_pages(envid_t child)
 	{
 		if ((uvpd[PDX(i)] & PTE_P) &&
 		    (uvpt[PGNUM(i)] & PTE_P) &&
-		    (uvpt[PGNUM(i)] & PTE_U) &&
 		    (uvpt[PGNUM(i)] & PTE_SHARE))
 		{
 			sys_page_map(0, (void*)i,

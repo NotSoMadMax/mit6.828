@@ -64,7 +64,7 @@ alloc_block(void)
     for (i = 0; i < super->s_nblocks; i++) {
         if (block_is_free(i)) {
             bitmap[i / 32] &= ~(1 << ( i %32));
-            flush_block(diskaddr(i));
+            flush_block(diskaddr(i + 2));
             return i;
         }
     }
@@ -161,7 +161,6 @@ file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool all
         *ppdiskbno = &((uintptr_t *) diskaddr(f->f_indirect))[filebno - NDIRECT];
     }
     return 0;
-
 }
 
 // Set *blk to the address in memory where the filebno'th

@@ -222,7 +222,6 @@ serve_read(envid_t envid, union Fsipc *ipc)
         return r;
     o->o_fd->fd_offset += r;
 	return r;
-
 }
 
 
